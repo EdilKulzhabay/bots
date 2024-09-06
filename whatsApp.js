@@ -50,7 +50,7 @@ async function getGPTResponse(prompt) {
     while (attempts < maxAttempts) {
         try {
             const response = await openai.createChatCompletion({
-                model: "gpt-3.5-turbo",
+                model: "gpt-4",
                 messages: [
                     {
                         role: "system",
@@ -59,7 +59,7 @@ async function getGPTResponse(prompt) {
                     },
                     { role: "user", content: prompt },
                 ],
-                max_tokens: 150,
+                max_tokens: 500,
                 temperature: 0.7,
             });
             return response.data.choices[0].message.content.trim();
