@@ -50,7 +50,7 @@ const chatHistories = {};
 const systemMessage = {
     role: "system",
     content:
-        "Приветствие: Здравствуйте! Я Бот 'Тибетская'. Чем можем помочь?Укажите точный адрес для доставки воды.1.Если клиент просит счет или счет на оплату: 'В ближайшее время с вами свяжется менеджер'.2.Товары: Стаканы и кулеры — tibetskaya.kz/accessories. Напишите для подтверждения.3.Первый заказ: Это первый заказ? Ответьте «да» или «нет».Если «да»: Поликарбонат (7) принимаем, ПЭТ (1) не принимаем. Бутыль стоит 4500 тенге.Если «нет»: Укажите количество бутылей и адрес.4.Минимальный заказ: 2 бутыля. Либо обмен, либо покупка новой за 4500 тенге.6.Доставка: Звоним за час до доставки.7.График работы: Пн–Сб, Вс — выходной.8.Чистка кулера: От 4000 тенге, скидка 50% при заказе воды.9.Вне рабочего времени: Ответим с 8:00 до 22:00.9.Принятие заказа: Заказ принят, свяжитесь с менеджером по +77475315558.10.Контакт: Менеджер: +77475315558.",
+        "Приветствие: Здравствуйте! Я Бот 'Тибетская'. Чем можем помочь?Укажите точный адрес для доставки воды.1.Товары: Стаканы и кулеры — tibetskaya.kz/accessories. Напишите для подтверждения.2.Первый заказ: Это первый заказ? Ответьте «да» или «нет».Если «да»: Поликарбонат (7) принимаем, ПЭТ (1) не принимаем. Бутыль стоит 4500 тенге.Если «нет»: Укажите количество бутылей и адрес.3.Минимальный заказ: 2 бутыля. Либо обмен, либо покупка новой за 4500 тенге.4.Доставка: Звоним за час до доставки.5.График работы: Пн–Сб, Вс — выходной.6.Чистка кулера: От 4000 тенге, скидка 50% при заказе воды.7.Вне рабочего времени: Ответим с 8:00 до 22:00.8.Принятие заказа: Заказ принят, свяжитесь с менеджером по +77475315558.10.Контакт: Менеджер: +77475315558.11.Цена за 12.5л.(маленьких) 900 тенге, за 18.9л.(больших) 1300 тенге.",
 };
 
 // Функция для обращения к GPT и получения ответа
@@ -148,10 +148,10 @@ async function getSummary(dialog) {
 client.on("message", async (msg) => {
     const chatId = msg.from;
 
-    // Сохраняем сообщение пользователя в историю
-    saveMessageToHistory(chatId, msg.body, "user");
-    
-    if (msg.body) {
+    if (msg.hasMedia) {
+        client.sendMessage(msg.from, 'К сожалению так как я бот, я не могу прослушать ваше аудио сообщение. Пожалуйста напишите ваш запрос');
+    } else if (msg.body) {
+        saveMessageToHistory(chatId, msg.body, "user");
         if (
             msg.body.toLowerCase().includes("кана") ||
             msg.body.toLowerCase().includes("канат") ||
@@ -163,7 +163,6 @@ client.on("message", async (msg) => {
 
             saveMessageToHistory(chatId, message, "assistant");
         } else if (msg.body.toLowerCase().includes("счет") || msg.body.toLowerCase().includes("счёт")) {
-            const gptResponse = await getGPTResponse(chatHistories[chatId]);
             const CHAT_ID = "-1002433505684";
             const CLIENT_NUMBER = chatId.slice(0, 11);
             const CLIENT_MESSAGE = `Клиент отправил запрос на счет на оплату:\nНомер клиента: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
@@ -192,16 +191,10 @@ client.on("message", async (msg) => {
                     console.error("Error sending message:", error);
                 });
 
-                client.sendMessage(chatId, gptResponse);
+                client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
 
                 // Сохраняем ответ бота в историю
-                saveMessageToHistory(chatId, gptResponse, "assistant");
-                if (
-                    msg.body.toLowerCase() === "ок" ||
-                    msg.body.toLowerCase() === "ok"
-                ) {
-                    chatHistories[chatId] = [];
-                }
+                saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
         } else {
             // Передаем всю историю диалога с системным сообщением в GPT
             const gptResponse = await getGPTResponse(chatHistories[chatId]);
@@ -250,19 +243,31 @@ client.on("message", async (msg) => {
                     .catch((error) => {
                         console.error("Error sending message:", error);
                     });
+                    // Отправляем ответ пользователю
+
+                const date = new Date()
+                const day = date.getDay()
+                const hour = date.getHours()
+
+                if (day === 0 || (day === 6 && hour >= 18)) {
+                    client.sendMessage(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
+                    saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
+                } else if (hour >= 18) {
+                    client.sendMessage(chatId, "Спасибо! Ваш заказ принят на завтра. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
+                    saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на завтра. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
+                } else {
+                    client.sendMessage(chatId, gptResponse);
+                    saveMessageToHistory(chatId, gptResponse, "assistant");
+                }
+            } else {
+                // Отправляем ответ пользователю
+                client.sendMessage(chatId, gptResponse);
+
+                // Сохраняем ответ бота в историю
+                saveMessageToHistory(chatId, gptResponse, "assistant");
             }
 
-            // Отправляем ответ пользователю
-            client.sendMessage(chatId, gptResponse);
-
-            // Сохраняем ответ бота в историю
-            saveMessageToHistory(chatId, gptResponse, "assistant");
-            if (
-                msg.body.toLowerCase() === "ок" ||
-                msg.body.toLowerCase() === "ok"
-            ) {
-                chatHistories[chatId] = [];
-            }
+            
         }
     }
 });
