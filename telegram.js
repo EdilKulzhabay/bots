@@ -118,8 +118,33 @@ async function getSummary(dialog) {
 bot.on("message", async (msg) => {
     const chatId = msg.from.id;
 
-    
-    if (msg.text) {
+    if (msg.audio) {
+        // Скачиваем аудиофайл
+        const audioFileId = msg.audio.file_id;
+        const audioFile = await bot.getFile(audioFileId);
+
+        const filePath = path.join(__dirname, `/telegramAudio/audio_${Date.now()}.ogg`);
+
+        // Загружаем аудиофайл
+        const audioUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_API_KEY}/${audioFile.file_path}`;
+        const audioStream = await axios({
+            url: audioUrl,
+            responseType: 'stream',
+        });
+
+        // Сохраняем аудиофайл на диск
+        const writeStream = fs.createWriteStream(filePath);
+        audioStream.data.pipe(writeStream);
+
+        writeStream.on('finish', async () => {
+            console.log(`Аудиосообщение сохранено как ${filePath}`);
+
+            const CLIENT_MESSAGE = `Клиент отправил аудио сообщение:\nНомер клиента: ${msg.from.username}\nhttps://t.me/${msg.from.username}`;
+
+            // Отправляем аудиофайл в другой чат
+            sendAudioToTelegram(filePath, CLIENT_MESSAGE);
+        });
+    } else  if (msg.text) {
         saveMessageToHistory(chatId, msg.text, "user");
         if (
             msg.text.toLowerCase().includes("кана") ||
@@ -238,5 +263,29 @@ bot.on("message", async (msg) => {
         }
     }
 });
+
+async function sendAudioToTelegram(filePath, CLIENT_MESSAGE) {
+    const formData = new FormData();
+    formData.append("chat_id", "-1002433505684"); // ID чата
+    formData.append("caption", CLIENT_MESSAGE);
+    formData.append("audio", fs.createReadStream(filePath)); // Передаем аудиофайл
+
+    try {
+        const response = await axios.post(
+            `https://api.telegram.org/bot${process.env.TOKEN}/sendAudio`,
+            formData,
+            {
+                headers: formData.getHeaders(),
+            }
+        );
+        console.log("Аудио успешно отправлено в Telegram:", response.data);
+
+        // Удаляем аудиофайл после успешной отправки
+        fs.unlinkSync(filePath);
+    } catch (error) {
+        console.error("Ошибка при отправке аудио в Telegram:", error);
+    }
+}
+
 
 console.log("Telegram bot is running...");

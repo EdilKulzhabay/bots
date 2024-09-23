@@ -5,6 +5,8 @@ require("dotenv").config();
 const path = require("path");
 const { default: axios } = require("axios");
 const url = `https://api.telegram.org/bot${process.env.TOKEN}/sendMessage`;
+const fs = require("fs");
+const FormData = require('form-data');
 
 // Инициализация OpenAI API
 const configuration = new Configuration({
@@ -149,7 +151,28 @@ client.on("message", async (msg) => {
     const chatId = msg.from;
 
     if (msg.hasMedia) {
-        client.sendMessage(msg.from, 'К сожалению так как я бот, я не могу прослушать ваше аудио сообщение. Пожалуйста напишите ваш запрос');
+        const media = await msg.downloadMedia();
+
+        if (media.mimetype.startsWith("audio/")) {
+            // Генерация уникального имени файла
+            const filePath = path.join(__dirname, `/whatsAppAudio/audio_${Date.now()}.ogg`);
+
+            // Записываем файл на диск
+            fs.writeFileSync(filePath, media.data, { encoding: "base64" });
+
+            console.log(`Аудиосообщение сохранено как ${filePath}`);
+            const CLIENT_NUMBER = chatId.slice(0, 11);
+            const CLIENT_MESSAGE = `Клиент отправил аудио сообщение:\nНомер клиента: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
+
+            // Отправляем аудиосообщение в Telegram
+            sendAudioToTelegram(filePath, CLIENT_MESSAGE);
+        } else {
+            client.sendMessage(
+                chatId,
+                "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение."
+            );
+        }
+
     } else if (msg.body) {
         saveMessageToHistory(chatId, msg.body, "user");
         if (
@@ -271,5 +294,26 @@ client.on("message", async (msg) => {
         }
     }
 });
+
+async function sendAudioToTelegram(filePath, CLIENT_MESSAGE) {
+    const formData = new FormData();
+    formData.append("chat_id", "-1002433505684"); // ID чата
+    formData.append("caption", CLIENT_MESSAGE)
+    formData.append("audio", fs.createReadStream(filePath)); // Передаем аудиофайл
+
+    try {
+        const response = await axios.post(
+            `https://api.telegram.org/bot${process.env.TOKEN}/sendAudio`,
+            formData,
+            {
+                headers: formData.getHeaders(),
+            }
+        );
+        fs.unlinkSync(filePath);
+    } catch (error) {
+        console.error("Ошибка при отправке аудио в Telegram:", error);
+    }
+}
+
 
 client.initialize();
