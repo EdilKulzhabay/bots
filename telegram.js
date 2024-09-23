@@ -3,6 +3,9 @@ const { OpenAIApi, Configuration } = require("openai");
 require("dotenv").config();
 const { default: axios } = require("axios");
 const url = `https://api.telegram.org/bot${process.env.TOKEN}/sendMessage`;
+const path = require('path');
+const fs = require("fs");
+const FormData = require('form-data');
 
 // Инициализация OpenAI API
 const configuration = new Configuration({
@@ -117,10 +120,13 @@ async function getSummary(dialog) {
 // Обработка входящих сообщений
 bot.on("message", async (msg) => {
     const chatId = msg.from.id;
+    console.log(msg);
+    
 
-    if (msg.audio) {
+    if (msg.voice) {
+        console.log(msg.voice);
         // Скачиваем аудиофайл
-        const audioFileId = msg.audio.file_id;
+        const audioFileId = msg.voice.file_id;
         const audioFile = await bot.getFile(audioFileId);
 
         const filePath = path.join(__dirname, `/telegramAudio/audio_${Date.now()}.ogg`);
