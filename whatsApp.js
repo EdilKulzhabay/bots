@@ -55,6 +55,22 @@ const systemMessage = {
         "Приветствие: Здравствуйте! Я Бот 'Тибетская'. Чем можем помочь?Укажите точный адрес для доставки воды.1.Товары: Стаканы и кулеры — tibetskaya.kz/accessories. Напишите для подтверждения.2.Первый заказ: Это первый заказ? Ответьте «да» или «нет».Если «да»: Поликарбонат (7) принимаем, ПЭТ (1) не принимаем. Бутыль стоит 4500 тенге.Если «нет»: Укажите количество бутылей и адрес.3.Минимальный заказ: 2 бутыля. Либо обмен, либо покупка новой за 4500 тенге.4.Доставка: Звоним за час до доставки.5.График работы: Пн–Сб, Вс — выходной.6.Чистка кулера: От 4000 тенге, скидка 50% при заказе воды.7.Вне рабочего времени: Ответим с 8:00 до 22:00.8.Принятие заказа: Заказ принят, свяжитесь с менеджером по +77475315558.10.Контакт: Менеджер: +77475315558.11.Цена за 12.5л.(маленьких) 900 тенге, за 18.9л.(больших) 1300 тенге.",
 };
 
+// Переменные для хранения количества уникальных пользователей и отправок в Telegram
+let uniqueUsersToday = new Set(); // Хранит уникальные ID пользователей за сегодня
+let messagesToTelegramToday = 0; // Количество сообщений, отправленных в Telegram сегодня
+let lastCheckDate = new Date().toLocaleDateString(); // Последняя дата для сброса
+
+// Функция для сброса счетчиков на следующий день
+function resetCountersIfNeeded() {
+    const currentDate = new Date().toLocaleDateString();
+    if (lastCheckDate !== currentDate) {
+        // Если наступил новый день, сбрасываем счетчики
+        uniqueUsersToday.clear();
+        messagesToTelegramToday = 0;
+        lastCheckDate = currentDate;
+    }
+}
+
 // Функция для обращения к GPT и получения ответа
 async function getGPTResponse(chatHistory) {
     let attempts = 0;
@@ -148,7 +164,20 @@ async function getSummary(dialog) {
 
 // Обработка входящих сообщений
 client.on("message", async (msg) => {
+
+    resetCountersIfNeeded(); // Проверяем, нужно ли сбрасывать счетчики
+
     const chatId = msg.from;
+
+    // Добавляем пользователя в список уникальных за день
+    uniqueUsersToday.add(chatId);
+
+    if (msg.body.toLowerCase() === "проверка") {
+        // Если пользователь отправил "Проверка", возвращаем количество пользователей и сообщений
+        const response = `Написали: ${uniqueUsersToday.size}.\nTelegram: ${messagesToTelegramToday}.`;
+        client.sendMessage(chatId, response);
+        return;
+    }
 
     if (msg.hasMedia) {
         const media = await msg.downloadMedia();
@@ -258,6 +287,7 @@ client.on("message", async (msg) => {
                         }
                     )
                     .then((response) => {
+                        messagesToTelegramToday++;
                         console.log(
                             "Message sent successfully:",
                             response.data
@@ -310,6 +340,7 @@ async function sendAudioToTelegram(filePath, CLIENT_MESSAGE) {
             }
         );
         fs.unlinkSync(filePath);
+        messagesToTelegramToday++;
     } catch (error) {
         console.error("Ошибка при отправке аудио в Telegram:", error);
     }
