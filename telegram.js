@@ -156,7 +156,7 @@ bot.on("message", async (msg) => {
             bot.sendMessage(chatId, message);
 
             saveMessageToHistory(chatId, message, "assistant");
-        } else if (msg.body.toLowerCase().includes("счет") || msg.body.toLowerCase().includes("счёт")) {
+        } else if (msg.text.toLowerCase().includes("счет") || msg.text.toLowerCase().includes("счёт")) {
             const CHAT_ID = "-1002433505684";
             const CLIENT_NAME = msg.from.username;
             const CLIENT_MESSAGE = `Клиент отправил запрос на счет на оплату:\nИмя клиента: +${CLIENT_NAME}\nhttps://t.me/${CLIENT_NAME}`;
