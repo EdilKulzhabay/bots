@@ -237,10 +237,10 @@ client.on("message", async (msg) => {
                     console.error("Error sending message:", error);
                 });
 
-                client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
+            client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
 
-                // Сохраняем ответ бота в историю
-                saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
+            // Сохраняем ответ бота в историю
+            saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
         } else {
             // Передаем всю историю диалога с системным сообщением в GPT
             const gptResponse = await getGPTResponse(chatHistories[chatId]);
@@ -250,49 +250,6 @@ client.on("message", async (msg) => {
                 gptResponse.toLowerCase().includes("принят")) || (gptResponse.toLowerCase().includes("заказыңыз") &&
                 gptResponse.toLowerCase().includes("қабылданды"))
             ) {
-                const CHAT_ID = "-1002433505684";
-                const CLIENT_NUMBER = chatId.slice(0, 11);
-
-                let dialog = "\n";
-
-                chatHistories[chatId].forEach((message) => {
-                    if (message.role === "user") {
-                        dialog += `клиент: ${message.content}\n`;
-                    } else if (message.role === "assistant") {
-                        dialog += `бот: ${message.content}\n`;
-                    }
-                });
-
-                const summary = await getSummary(dialog);
-
-                const CLIENT_MESSAGE = `Клиент отправил запрос на заказ:\nНомер клиента: +${CLIENT_NUMBER}\n${summary}\nhttps://wa.me/${CLIENT_NUMBER}`;
-
-                axios
-                    .post(
-                        url,
-                        new URLSearchParams({
-                            chat_id: CHAT_ID,
-                            text: CLIENT_MESSAGE,
-                        }).toString(),
-                        {
-                            headers: {
-                                "Content-Type":
-                                    "application/x-www-form-urlencoded",
-                            },
-                        }
-                    )
-                    .then((response) => {
-                        messagesToTelegramToday++;
-                        console.log(
-                            "Message sent successfully:",
-                            response.data
-                        );
-                    })
-                    .catch((error) => {
-                        console.error("Error sending message:", error);
-                    });
-                    // Отправляем ответ пользователю
-
                 const date = new Date()
                 const day = date.getDay()
                 const hour = date.getHours()
@@ -314,8 +271,6 @@ client.on("message", async (msg) => {
                 // Сохраняем ответ бота в историю
                 saveMessageToHistory(chatId, gptResponse, "assistant");
             }
-
-
         }
     }
 });
