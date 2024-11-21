@@ -163,7 +163,7 @@ client.on("message", async (msg) => {
 
     const chat = await Chat.findOne({chatId})
 
-    if (chat === null) {
+    if (chat) {
         return
     }
 
