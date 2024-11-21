@@ -82,11 +82,11 @@ client.on('message_create', (msg) => {
     if (msg.fromMe) {
         const chatId = msg.to;
 
-        if (msg.body.toLocaleLowerCase().includes("включить бота")) {
+        if (msg.body.toLocaleLowerCase().includes("отключить бота")) {
             addChat(chatId);
         }
 
-        if (msg.body.toLocaleLowerCase().includes("отключить бота")) {
+        if (msg.body.toLocaleLowerCase().includes("включить бота")) {
             removeChat(chatId);
         }
     }
@@ -160,6 +160,12 @@ function saveMessageToHistory(chatId, message, role) {
 client.on("message", async (msg) => {
     resetCountersIfNeeded(); // Проверяем, нужно ли сбрасывать счетчики
     const chatId = msg.from;
+
+    const chat = await Chat.findOne({chatId})
+
+    if (chat === null) {
+        return
+    }
 
     // Добавляем пользователя в список уникальных за день
     uniqueUsersToday.add(chatId);
