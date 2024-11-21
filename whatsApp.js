@@ -7,6 +7,17 @@ const { default: axios } = require("axios");
 const url = `https://api.telegram.org/bot${process.env.TOKEN}/sendMessage`;
 const fs = require("fs");
 const FormData = require('form-data');
+const mongoose = require("mongoose")
+const Chat = require("./Chat")
+
+mongoose
+    .connect("mongodb://localhost:27017/BotTibetskaya")
+    .then(() => {
+        console.log("Mongodb OK");
+    })
+    .catch((err) => {
+        console.log("Mongodb Error", err);
+    });
 
 // Инициализация OpenAI API
 const configuration = new Configuration({
@@ -54,6 +65,32 @@ const systemMessage = {
     content:
         "Приветствие: Здравствуйте! Я бот «Тибетская». Чем могу помочь? Заказ воды: Пожалуйста, укажите ваш точный адрес и количество бутылей. Примечание для бота: Если клиент не указывает тип бутыли, по умолчанию считать 18,9 л Поликарбонат. Подтверждение заказа: Повторите детали заказа для подтверждения. Например: 'Ваш заказ: 4 бутыли воды «Тибетская» объёмом 18,9 л по адресу [адрес]. Подтверждаете?' Если клиент подтверждает, ответьте: 'Спасибо, ваш заказ принят! Рахмет, заказыңыз қабылданды. Наш курьер свяжется с вами за час до доставки.' Дополнительные товары: Стаканы и кулеры: tibetskaya.kz/accessories.Чистка кулера: От 4000 тенге. При заказе воды — скидка 50%.График работы: Пн–Сб, 8:00–22:00. Вс — выходной. Контакты: Вопросы? Менеджер: +7 747 531 55 58.",
 };
+
+const addChat = async (chatId) => {
+    const chat = new Chat({
+        chatId
+    });
+
+    await chat.save();
+}
+
+const removeChat = async (chatId) => {
+    await Chat.deleteOne({ chatId });
+}
+
+client.on('message_create', (msg) => {
+    if (msg.fromMe) {
+        const chatId = msg.to;
+
+        if (msg.body.toLocaleLowerCase().includes("включить бота")) {
+            addChat(chatId);
+        }
+
+        if (msg.body.toLocaleLowerCase().includes("отключить бота")) {
+            removeChat(chatId);
+        }
+    }
+});
 
 // Переменные для хранения количества уникальных пользователей и отправок в Telegram
 let uniqueUsersToday = new Set(); // Хранит уникальные ID пользователей за сегодня
@@ -117,47 +154,6 @@ function saveMessageToHistory(chatId, message, role) {
     if (chatHistories[chatId].length > 10) {
         chatHistories[chatId].shift(); // Удаляем самое старое сообщение, если больше 16
     }
-}
-
-async function getSummary(dialog) {
-    let attempts = 0;
-    const maxAttempts = 3; // Максимум 3 попытки
-    const retryDelay = 3000; // 3 секунды между попытками
-
-    // Добавляем системное сообщение перед историей
-    const messages = [
-        {
-            role: "system",
-            content:
-                "Составь краткое содержание диалога. Сначала укажи количество бутылей в формате: 'Количество больших: [цифра]'\n 'Количество маленьких: [цифра]', затем укажи адрес в формате: 'Адрес: [адрес]', затем укажи в первый ли раз заказывает клиент в формате: 'Первый: [да/нет]', затем укажи в есть ли бутыли у клиента в формате: 'Бутыли: [имеются/не имеются]'",
-        },
-        {
-            role: "user",
-            content: dialog,
-        },
-    ];
-
-    while (attempts < maxAttempts) {
-        try {
-            const response = await openai.createChatCompletion({
-                model: "gpt-4",
-                messages: messages,
-                max_tokens: 300,
-                temperature: 0.7,
-            });
-            return response.data.choices[0].message.content.trim();
-        } catch (error) {
-            if (error.response && error.response.status === 429) {
-                console.log("Превышен лимит запросов, повторная попытка...");
-                attempts++;
-                await new Promise((resolve) => setTimeout(resolve, retryDelay));
-            } else {
-                console.error("Ошибка при обращении к OpenAI:", error);
-                return "Извините, произошла ошибка при обработке вашего запроса.";
-            }
-        }
-    }
-    return "Извините, превышен лимит попыток обращения к OpenAI.";
 }
 
 // Обработка входящих сообщений
