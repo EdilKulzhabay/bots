@@ -1,6 +1,5 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
-const { OpenAIApi, Configuration } = require("openai");
 require("dotenv").config();
 const path = require("path");
 const { default: axios } = require("axios");
@@ -8,7 +7,10 @@ const url = `https://api.telegram.org/bot${process.env.TOKEN}/sendMessage`;
 const fs = require("fs");
 const FormData = require('form-data');
 const mongoose = require("mongoose")
-const Chat = require("./Chat")
+const Chat = require("./Chat");
+const { prompt, scripts, kzScripts, enScripts } = require("./prompt");
+const User = require("./User");
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
 mongoose
     .connect("mongodb://localhost:27017/BotTibetskaya")
@@ -18,12 +20,6 @@ mongoose
     .catch((err) => {
         console.log("Mongodb Error", err);
     });
-
-// Инициализация OpenAI API
-const configuration = new Configuration({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
 
 // Убедитесь, что путь к сессии корректный
 const client = new Client({
@@ -56,16 +52,6 @@ client.on("ready", () => {
     console.log("Client is ready!");
 });
 
-// Хранилище для истории сообщений
-const chatHistories = {};
-
-// Системный промпт для установки контекста диалога
-const systemMessage = {
-    role: "system",
-    content:
-        "Здравствуйте! Я бот воды «Тибетская». Чем могу помочь? Воскресенье не работаем и не доставляем!!! Заказ воды: Укажите адрес и количество бутылей (минимум 2). Мы предлагаем бутыли объёмом 18,9 л и 12,5 л. Цены на воду: 18,9 л — 1300₸, 12,5 л — 900₸. Подтверждение заказа: Пример: «Ваш заказ: 4 бутыли 18,9 л по адресу [адрес]. Подтверждаете?» При подтверждении: «Спасибо! Курьер свяжется за час до доставки.» Дополнительные товары: Сайт: tibetskaya.kz/accessories. Чистка кулера: От 4000₸, скидка 50% при заказе воды. Мы работаем: Пн–Сб: 8:00–22:00, Вс: выходной. Контакты: Менеджер: 8 747 531 55 58 Если заказ сделан после 12:00, доставка будет завтра.",
-};
-
 const addChat = async (chatId) => {
     const chat = new Chat({
         chatId
@@ -78,16 +64,16 @@ const removeChat = async (chatId) => {
     await Chat.deleteOne({ chatId });
 }
 
-client.on('message_create', (msg) => {
+client.on('message_create', async (msg) => {
     if (msg.fromMe) {
         const chatId = msg.to;
 
         if (msg.body.toLocaleLowerCase().includes("отключить бота")) {
-            addChat(chatId);
+            await addChat(chatId);
         }
 
         if (msg.body.toLocaleLowerCase().includes("включить бота")) {
-            removeChat(chatId);
+            await removeChat(chatId);
         }
     }
 });
@@ -107,59 +93,44 @@ function resetCountersIfNeeded() {
     }
 }
 // Функция для обращения к GPT и получения ответа
-async function getGPTResponse(chatHistory) {
-    let attempts = 0;
-    const maxAttempts = 3; // Максимум 3 попытки
-    const retryDelay = 3000; // 3 секунды между попытками
+const gptResponse = async (text) => {
+    const messages = [
+        {
+            role: "system",
+            content: prompt,
+        },
+        {
+            role: "user",
+            content: text,
+        },
+    ];
 
-    // Добавляем системное сообщение перед историей
-    const messages = [systemMessage, ...chatHistory];
-
-    while (attempts < maxAttempts) {
-        try {
-            const response = await openai.createChatCompletion({
-                model: "gpt-4",
-                messages: messages, // передаем системное сообщение и всю историю диалога
-                max_tokens: 500,
-                temperature: 0.7,
-            });
-            return response.data.choices[0].message.content.trim();
-        } catch (error) {
-            if (error.response && error.response.status === 429) {
-                console.log("Превышен лимит запросов, повторная попытка...");
-                attempts++;
-                await new Promise((resolve) => setTimeout(resolve, retryDelay));
-            } else {
-                console.error("Ошибка при обращении к OpenAI:", error);
-                return "Извините, произошла ошибка при обработке вашего запроса.";
-            }
+    const response = await axios.post(
+        "https://api.openai.com/v1/chat/completions",
+        {
+            model: "gpt-4o-mini",
+            messages,
+        },
+        {
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${OPENAI_API_KEY}`,
+            },
         }
-    }
-    return "Извините, превышен лимит попыток обращения к OpenAI.";
-}
+    );
 
-// Функция для сохранения сообщения в историю
-function saveMessageToHistory(chatId, message, role) {
-    if (!chatHistories[chatId]) {
-        chatHistories[chatId] = [];
-    }
 
-    // Сохраняем новое сообщение в виде объекта с ролью
-    chatHistories[chatId].push({
-        role: role,
-        content: message,
-    });
+    const answer = response.data.choices[0].message.content;
 
-    // Оставляем только последние 8 пар сообщений (16 сообщений всего)
-    if (chatHistories[chatId].length > 10) {
-        chatHistories[chatId].shift(); // Удаляем самое старое сообщение, если больше 16
-    }
-}
+    return answer;
+};
 
 // Обработка входящих сообщений
 client.on("message", async (msg) => {
     resetCountersIfNeeded(); // Проверяем, нужно ли сбрасывать счетчики
     const chatId = msg.from;
+    const message = msg.body;
+    const CLIENT_NUMBER = chatId.slice(0, 11);
 
     const chat = await Chat.findOne({chatId})
 
@@ -167,8 +138,17 @@ client.on("message", async (msg) => {
         return
     }
 
-    // Добавляем пользователя в список уникальных за день
-    uniqueUsersToday.add(chatId);
+    let user = await User.findOne({ chatId });
+
+    if (!message || message.trim() === "") {
+        return client.sendMessage(chatId, "Пожалуйста, отправьте сообщение.");
+    }
+
+    if (!user) {
+        user = new User({ chatId });
+        await user.save();
+    }
+    
     if (msg.body.toLowerCase() === "проверка") {
         // Если пользователь отправил "Проверка", возвращаем количество пользователей и сообщений
         const response = `Написали: ${uniqueUsersToday.size}.\nTelegram: ${messagesToTelegramToday}.`;
@@ -199,7 +179,6 @@ client.on("message", async (msg) => {
         }
 
     } else if (msg.body) {
-        saveMessageToHistory(chatId, msg.body, "user");
         if (
             msg.body.toLowerCase().includes("кана") ||
             msg.body.toLowerCase().includes("канат") ||
@@ -211,71 +190,106 @@ client.on("message", async (msg) => {
 
             saveMessageToHistory(chatId, message, "assistant");
         } else if (msg.body.toLowerCase().includes("счет") || msg.body.toLowerCase().includes("счёт")) {
-            const CHAT_ID = "-1002433505684";
-            const CLIENT_NUMBER = chatId.slice(0, 11);
             const CLIENT_MESSAGE = `Клиент отправил запрос на счет на оплату:\nНомер клиента: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
-
-            axios
-                .post(
-                    url,
-                    new URLSearchParams({
-                        chat_id: CHAT_ID,
-                        text: CLIENT_MESSAGE,
-                    }).toString(),
-                    {
-                        headers: {
-                            "Content-Type":
-                                "application/x-www-form-urlencoded",
-                        },
-                    }
-                )
-                .then((response) => {
-                    console.log(
-                        "Message sent successfully:",
-                        response.data
-                    );
-                })
-                .catch((error) => {
-                    console.error("Error sending message:", error);
-                });
+            await sendMessageToTelegram(CLIENT_MESSAGE)
 
             client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
 
-            // Сохраняем ответ бота в историю
-            saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
         } else {
-            // Передаем всю историю диалога с системным сообщением в GPT
-            const gptResponse = await getGPTResponse(chatHistories[chatId]);
+            const answer = await gptResponse(msg.body);
+            
+            const isKZ = answer.toLocaleLowerCase().includes("kz")
+            const isEN = answer.toLocaleLowerCase().includes("en")
 
-            if (
-                (gptResponse.toLowerCase().includes("заказ") &&
-                gptResponse.toLowerCase().includes("принят")) || (gptResponse.toLowerCase().includes("заказыңыз") &&
-                gptResponse.toLowerCase().includes("қабылданды"))
-            ) {
-                const date = new Date()
-                const day = date.getDay()
-                const hour = date.getHours()
+            if (isKZ) {
+                user.language = "kz"
+                await user.save()
+            } else if (isEN) {
+                user.language = "en"
+                await user.save()
+            } else {
+                user.language = "ru"
+                await user.save()
+            }
 
-                if (day === 0 || (day === 6 && hour >= 12)) {
-                    client.sendMessage(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
-                    saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
-                } else if (hour >= 12) {
-                    client.sendMessage(chatId, "Спасибо! Ваш заказ принят на завтра. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
-                    saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на завтра. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
+            const match = answer.match(/\d+/g);
+            const scriptIndex = match ? parseInt(match[0], 10) : null;
+
+            const isFirstMessageToday = !uniqueUsersToday.has(chatId);
+    
+            if (isFirstMessageToday && !scriptIndex) {
+                uniqueUsersToday.add(chatId);
+                const script = isKZ ? kzScripts[0] : isEN ? enScripts[0] : scripts[0]; // Получаем соответствующий скрипт из массива
+                await client.sendMessage(chatId, script); // Отправляем приветственное сообщение
+                return; // Завершаем обработку, так как ответ уже отправлен
+            }
+            
+            if (scriptIndex && scriptIndex === 4) {
+                const CLIENT_MESSAGE = `Клиент спршивает по поводу доставки: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
+                await sendMessageToTelegram(CLIENT_MESSAGE)
+                const script = isKZ ? kzScripts[scriptIndex] : isEN ? enScripts[scriptIndex] : scripts[scriptIndex];
+                await client.sendMessage(chatId, script);
+                return
+            }
+            if (scriptIndex && scriptIndex === 5) {
+                const CLIENT_MESSAGE = `Клиент хочет поменять дату доставки: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
+                await sendMessageToTelegram(CLIENT_MESSAGE)
+                const script = isKZ ? kzScripts[scriptIndex] : isEN ? enScripts[scriptIndex] : scripts[scriptIndex];
+                await client.sendMessage(chatId, script);
+                return
+            }
+            if (scriptIndex) {
+                const script = isKZ ? kzScripts[scriptIndex] : isEN ? enScripts[scriptIndex] : scripts[scriptIndex]; // Получаем соответствующий скрипт из массива
+                if (script) {
+                    await client.sendMessage(chatId, script);
                 } else {
-                    client.sendMessage(chatId, gptResponse);
-                    saveMessageToHistory(chatId, gptResponse, "assistant");
+                    if (user?.language === "kz") {
+                        await client.sendMessage(chatId, "Сұрақты түсінбедім, нақтылап жазсаңыз.")
+                    } else if (user?.language === "en") {
+                        await client.sendMessage(chatId, "I didn't understand the question, please clarify.")
+                    } else {
+                        await client.sendMessage(chatId, "Не понял вопроса, уточните, пожалуйста.")
+                    }
                 }
             } else {
-                // Отправляем ответ пользователю
-                client.sendMessage(chatId, gptResponse);
-
-                // Сохраняем ответ бота в историю
-                saveMessageToHistory(chatId, gptResponse, "assistant");
+                if (user?.language === "kz") {
+                    await client.sendMessage(chatId, "Сұрақты түсінбедім, нақтылап жазсаңыз.")
+                } else if (user?.language === "en") {
+                    await client.sendMessage(chatId, "I didn't understand the question, please clarify.")
+                } else {
+                    await client.sendMessage(chatId, "Не понял вопроса, уточните, пожалуйста.")
+                }
             }
         }
     }
 });
+
+async function sendMessageToTelegram(CLIENT_MESSAGE) {
+    const CHAT_ID = "-1002433505684";
+    axios
+        .post(
+            url,
+            new URLSearchParams({
+                chat_id: CHAT_ID,
+                text: CLIENT_MESSAGE,
+            }).toString(),
+            {
+                headers: {
+                    "Content-Type":
+                        "application/x-www-form-urlencoded",
+                },
+            }
+        )
+        .then((response) => {
+            console.log(
+                "Message sent successfully:",
+                response.data
+            );
+        })
+        .catch((error) => {
+            console.error("Error sending message:", error);
+        });
+}
 
 async function sendAudioToTelegram(filePath, CLIENT_MESSAGE) {
     const formData = new FormData();
