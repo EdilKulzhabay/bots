@@ -30,6 +30,16 @@ const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true, // Убедитесь, что Puppeteer работает в headless режиме
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--single-process',
+            '--memory-pressure-off',
+            '--disable-background-timer-throttling',
+            '--disable-breakpad'
+        ],
     },
 });
 
