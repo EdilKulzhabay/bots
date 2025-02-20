@@ -1,6 +1,5 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
-const { OpenAIApi, Configuration } = require("openai");
 require("dotenv").config();
 const path = require("path");
 const { default: axios } = require("axios");
@@ -10,6 +9,8 @@ const FormData = require('form-data');
 const mongoose = require("mongoose")
 const Chat = require("./Chat")
 
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+
 mongoose
     .connect("mongodb://localhost:27017/BotTibetskaya")
     .then(() => {
@@ -18,12 +19,6 @@ mongoose
     .catch((err) => {
         console.log("Mongodb Error", err);
     });
-
-// Инициализация OpenAI API
-const configuration = new Configuration({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
 
 // Убедитесь, что путь к сессии корректный
 const client = new Client({
@@ -73,7 +68,7 @@ const chatHistories = {};
 const systemMessage = {
     role: "system",
     content:
-        "Здравствуйте! Я бот воды «Тибетская». Чем могу помочь? Воскресенье не работаем и не доставляем!!! Заказ воды: Укажите адрес и количество бутылей (минимум 2). Мы предлагаем бутыли объёмом 18,9 л и 12,5 л. Цена бутыля 2500₸. Цены на воду: 18,9 л — 1300₸, 12,5 л — 900₸. Подтверждение заказа: Пример: «Ваш заказ: 4 бутыли 18,9 л по адресу [адрес]. Подтверждаете?» При подтверждении: «Спасибо! Курьер свяжется за час до доставки.» Дополнительные товары: Сайт: tibetskaya.kz/accessories. Чистка кулера: От 4000₸, скидка 50% при заказе воды. Мы работаем: Пн–Сб: 8:00–22:00, Вс: выходной. Контакты: Менеджер: 8 747 531 55 58 Если заказ сделан после 12:00, доставка будет завтра.",
+        "Здравствуйте! Я бот воды «Тибетская». Чем могу помочь? Воскресенье не работаем и не доставляем!!! Заказ воды: Укажите адрес и количество бутылей (минимум 2). Мы предлагаем бутыли объёмом 18,9 л и 12,5 л. Цена бутыля 2500₸. Цены на воду: 18,9 л — 1300₸, 12,5 л — 900₸. Подтверждение заказа: Пример: «Ваш заказ: 4 бутыли 18,9 л по адресу [адрес]. Подтверждаете?» При подтверждении: «Спасибо! Курьер свяжется за час до доставки.» Дополнительные товары: Сайт: tibetskaya.kz/accessories. Чистка кулера: От 4000₸, скидка 50% при заказе воды. Мы работаем: Пн–Сб: 8:00–22:00, Вс: выходной. Контакты: Менеджер: 8 747 531 55 58 Если заказ сделан после 12:00, доставка будет завтра. Теперь доступно клиентское приложение «Тибетская» для удобного заказа воды и дополнительных услуг!: iOS (Apple): https://apps.apple.com/app/id6737682997 , Android https://surl.li/lfiryc Скоро: приложение появится в PlayMarket! Если клиент просит новую версию то отвечай так (Если у вас ios то вы можете обновить через appStore, а если у вас android то можете перейти по ссылке и установить новую версию)",
 };
 
 const addChat = async (chatId) => {
@@ -102,51 +97,39 @@ client.on('message_create', (msg) => {
     }
 });
 
-// Переменные для хранения количества уникальных пользователей и отправок в Telegram
 let uniqueUsersToday = new Set(); // Хранит уникальные ID пользователей за сегодня
 let messagesToTelegramToday = 0; // Количество сообщений, отправленных в Telegram сегодня
 let lastCheckDate = new Date().toLocaleDateString(); // Последняя дата для сброса
-// Функция для сброса счетчиков на следующий день
 function resetCountersIfNeeded() {
     const currentDate = new Date().toLocaleDateString();
     if (lastCheckDate !== currentDate) {
-        // Если наступил новый день, сбрасываем счетчики
         uniqueUsersToday.clear();
         messagesToTelegramToday = 0;
         lastCheckDate = currentDate;
     }
 }
-// Функция для обращения к GPT и получения ответа
-async function getGPTResponse(chatHistory) {
-    let attempts = 0;
-    const maxAttempts = 3; // Максимум 3 попытки
-    const retryDelay = 3000; // 3 секунды между попытками
 
-    // Добавляем системное сообщение перед историей
+const getGPTResponse = async (chatHistory) => {
     const messages = [systemMessage, ...chatHistory];
 
-    while (attempts < maxAttempts) {
-        try {
-            const response = await openai.createChatCompletion({
-                model: "gpt-4",
-                messages: messages, // передаем системное сообщение и всю историю диалога
-                max_tokens: 500,
-                temperature: 0.7,
-            });
-            return response.data.choices[0].message.content.trim();
-        } catch (error) {
-            if (error.response && error.response.status === 429) {
-                console.log("Превышен лимит запросов, повторная попытка...");
-                attempts++;
-                await new Promise((resolve) => setTimeout(resolve, retryDelay));
-            } else {
-                console.error("Ошибка при обращении к OpenAI:", error);
-                return "Извините, произошла ошибка при обработке вашего запроса.";
-            }
+    const response = await axios.post(
+        "https://api.openai.com/v1/chat/completions",
+        {
+            model: "gpt-4o-mini",
+            messages,
+        },
+        {
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${OPENAI_API_KEY}`,
+            },
         }
-    }
-    return "Извините, превышен лимит попыток обращения к OpenAI.";
-}
+    );
+
+
+    const answer = response.data.choices[0].message.content;
+    return answer;
+};
 
 // Функция для сохранения сообщения в историю
 function saveMessageToHistory(chatId, message, role) {
