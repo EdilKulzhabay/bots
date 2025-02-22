@@ -109,35 +109,37 @@ function resetCountersIfNeeded() {
     }
 }
 
-const getGPTResponse = async (chatHistory) => {
-    const currentDate = new Date();
-    const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
-    const currentTime = currentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+async function getGPTResponse(chatHistory) {
+    let attempts = 0;
+    const maxAttempts = 3; // Максимум 3 попытки
+    const retryDelay = 3000; // 3 секунды между попытками
 
-    const dateMessage = {
-        role: "system",
-        content: `Сегодня ${dayOfWeek}, текущее время: ${currentTime}.`
-    };
+    // Добавляем системное сообщение перед историей
+    const messages = [systemMessage, ...chatHistory];
 
-    const messages = [systemMessage, dateMessage, ...chatHistory];
-
-    const response = await axios.post(
-        "https://api.openai.com/v1/chat/completions",
-        {
-            model: "gpt-4o-mini",
-            messages,
-        },
-        {
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${OPENAI_API_KEY}`,
-            },
+    while (attempts < maxAttempts) {
+        try {
+            const response = await openai.createChatCompletion({
+                model: "gpt-4",
+                messages: messages, // передаем системное сообщение и всю историю диалога
+                max_tokens: 500,
+                temperature: 0.7,
+            });
+            return response.data.choices[0].message.content.trim();
+        } catch (error) {
+            if (error.response && error.response.status === 429) {
+                console.log("Превышен лимит запросов, повторная попытка...");
+                attempts++;
+                await new Promise((resolve) => setTimeout(resolve, retryDelay));
+            } else {
+                console.error("Ошибка при обращении к OpenAI:", error);
+                return "Извините, произошла ошибка при обработке вашего запроса.";
+            }
         }
-    );
+    }
+    return "Извините, превышен лимит попыток обращения к OpenAI.";
+}
 
-    const answer = response.data.choices[0].message.content;
-    return answer;
-};
 
 // Функция для сохранения сообщения в историю
 function saveMessageToHistory(chatId, message, role) {
