@@ -110,7 +110,16 @@ function resetCountersIfNeeded() {
 }
 
 const getGPTResponse = async (chatHistory) => {
-    const messages = [systemMessage, ...chatHistory];
+    const currentDate = new Date();
+    const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+    const currentTime = currentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+    const dateMessage = {
+        role: "system",
+        content: `Сегодня ${dayOfWeek}, текущее время: ${currentTime}.`
+    };
+
+    const messages = [systemMessage, dateMessage, ...chatHistory];
 
     const response = await axios.post(
         "https://api.openai.com/v1/chat/completions",
@@ -125,7 +134,6 @@ const getGPTResponse = async (chatHistory) => {
             },
         }
     );
-
 
     const answer = response.data.choices[0].message.content;
     return answer;
