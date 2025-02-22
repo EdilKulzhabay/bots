@@ -110,21 +110,7 @@ function resetCountersIfNeeded() {
 }
 
 const getGPTResponse = async (chatHistory) => {
-    const date = new Date();
-    const day = date.getDay(); // 0 - воскресенье, 1 - понедельник и т.д.
-    const hour = date.getHours();
-    console.log(date);
-    
-
-    const dayNames = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
-    const currentDayName = dayNames[day];
-
-    const systemMessageWithDate = {
-        role: "system",
-        content: `Сегодня ${currentDayName}, ${hour}:00. Напоминаю, что доставка работает с понедельника по субботу с 8:00 до 22:00. Воскресенье — выходной. Здравствуйте! Я бот воды «Тибетская». Чем могу помочь? Воскресенье не работаем и не доставляем!!! Заказ воды: Укажите адрес и количество бутылей (минимум 2). Мы предлагаем бутыли объёмом 18,9 л и 12,5 л. Цена бутыля 2500₸. Цены на воду: 18,9 л — 1300₸, 12,5 л — 900₸. Подтверждение заказа: Пример: «Ваш заказ: 4 бутыли 18,9 л по адресу [адрес]. Подтверждаете?» При подтверждении: «Спасибо! Курьер свяжется за час до доставки.» Дополнительные товары: Сайт: tibetskaya.kz/accessories. Чистка кулера: От 4000₸, скидка 50% при заказе воды. Мы работаем: Пн–Сб: 8:00–22:00, Вс: выходной. Контакты: Менеджер: 8 747 531 55 58 Если заказ сделан после 12:00, доставка будет завтра. Теперь доступно клиентское приложение «Тибетская» для удобного заказа воды и дополнительных услуг!: iOS (Apple): https://apps.apple.com/app/id6737682997 , Android https://surl.li/emlyyw Скоро: приложение появится в PlayMarket! Если клиент просит новую версию то отвечай так (Если у вас ios то вы можете обновить через appStore, а если у вас android то можете перейти по ссылке и установить новую версию)`
-    };
-
-    const messages = [systemMessageWithDate, ...chatHistory];
+    const messages = [systemMessage, ...chatHistory];
 
     const response = await axios.post(
         "https://api.openai.com/v1/chat/completions",
@@ -139,6 +125,7 @@ const getGPTResponse = async (chatHistory) => {
             },
         }
     );
+
 
     const answer = response.data.choices[0].message.content;
     return answer;
