@@ -1,5 +1,6 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
+const { OpenAIApi, Configuration } = require("openai");
 require("dotenv").config();
 const path = require("path");
 const { default: axios } = require("axios");
@@ -19,6 +20,12 @@ mongoose
     .catch((err) => {
         console.log("Mongodb Error", err);
     });
+
+    // Инициализация OpenAI API
+const configuration = new Configuration({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(configuration);
 
 // Убедитесь, что путь к сессии корректный
 const client = new Client({
