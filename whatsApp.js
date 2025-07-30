@@ -10,6 +10,8 @@ const FormData = require('form-data');
 const mongoose = require("mongoose")
 const Chat = require("./Chat")
 
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+
 mongoose
     .connect("mongodb://localhost:27017/BotTibetskaya")
     .then(() => {
@@ -19,7 +21,7 @@ mongoose
         console.log("Mongodb Error", err);
     });
 
-// Инициализация OpenAI API
+    // Инициализация OpenAI API
 const configuration = new Configuration({
     apiKey: process.env.OPENAI_API_KEY,
 });
@@ -73,7 +75,7 @@ const chatHistories = {};
 const systemMessage = {
     role: "system",
     content:
-        "Здравствуйте! Я бот воды «Тибетская». Чем могу помочь? Воскресенье не работаем и не доставляем!!! Заказ воды: Укажите адрес и количество бутылей (минимум 2). Мы предлагаем бутыли объёмом 18,9 л и 12,5 л. Цена бутыля 3000₸. Цены на воду: 18,9 л — 1300₸, 12,5 л — 900₸. Подтверждение заказа: Пример: «Ваш заказ: 4 бутыли 18,9 л по адресу [адрес]. Подтверждаете?» При подтверждении: «Спасибо! Курьер свяжется за час до доставки.» Дополнительные товары: Сайт: tibetskaya.kz/accessories. Чистка кулера: От 4000₸, скидка 50% при заказе воды. Мы работаем: Пн–Сб: 8:00–22:00, Вс: выходной. Контакты: Менеджер: 8 747 531 55 58",
+        "Здравствуйте! Я бот воды «Тибетская». Чем могу помочь? Воскресенье не работаем и не доставляем!!! Заказ воды: Укажите адрес и количество бутылей (минимум 2). Мы предлагаем бутыли объёмом 18,9 л и 12,5 л. Цена бутыля 2500₸. Цены на воду: 18,9 л — 1300₸, 12,5 л — 900₸. Подтверждение заказа: Пример: «Ваш заказ: 4 бутыли 18,9 л по адресу [адрес]. Подтверждаете?» При подтверждении: «Спасибо! Курьер свяжется за час до доставки.» Дополнительные товары: Сайт: tibetskaya.kz/accessories. Чистка кулера: От 4000₸, скидка 50% при заказе воды. Мы работаем: Пн–Сб: 8:00–22:00, Вс: выходной. Контакты: Менеджер: 8 747 531 55 58",
 };
 
 const addChat = async (chatId) => {
@@ -102,21 +104,18 @@ client.on('message_create', (msg) => {
     }
 });
 
-// Переменные для хранения количества уникальных пользователей и отправок в Telegram
 let uniqueUsersToday = new Set(); // Хранит уникальные ID пользователей за сегодня
 let messagesToTelegramToday = 0; // Количество сообщений, отправленных в Telegram сегодня
 let lastCheckDate = new Date().toLocaleDateString(); // Последняя дата для сброса
-// Функция для сброса счетчиков на следующий день
 function resetCountersIfNeeded() {
     const currentDate = new Date().toLocaleDateString();
     if (lastCheckDate !== currentDate) {
-        // Если наступил новый день, сбрасываем счетчики
         uniqueUsersToday.clear();
         messagesToTelegramToday = 0;
         lastCheckDate = currentDate;
     }
 }
-// Функция для обращения к GPT и получения ответа
+
 async function getGPTResponse(chatHistory) {
     let attempts = 0;
     const maxAttempts = 3; // Максимум 3 попытки
@@ -147,6 +146,7 @@ async function getGPTResponse(chatHistory) {
     }
     return "Извините, превышен лимит попыток обращения к OpenAI.";
 }
+
 
 // Функция для сохранения сообщения в историю
 function saveMessageToHistory(chatId, message, role) {
