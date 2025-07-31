@@ -8,8 +8,7 @@ const url = `https://api.telegram.org/bot${process.env.TOKEN}/sendMessage`;
 const fs = require("fs");
 const FormData = require('form-data');
 const mongoose = require("mongoose")
-const Chat = require("./Chat");
-const { newPrompt } = require("./newPropmpt");
+const Chat = require("./Chat")
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
@@ -69,25 +68,14 @@ client.on("ready", () => {
     console.log("Client is ready!");
 });
 
-// Функция для безопасной отправки сообщений с задержкой
-async function safeSendMessage(chatId, message) {
-    try {
-        await new Promise(resolve => setTimeout(resolve, 100)); // Небольшая задержка
-        await client.sendMessage(chatId, message);
-        return true;
-    } catch (error) {
-        console.error("Ошибка при отправке сообщения:", error);
-        return false;
-    }
-}
-
 // Хранилище для истории сообщений
 const chatHistories = {};
 
 // Системный промпт для установки контекста диалога
 const systemMessage = {
     role: "system",
-    content: newPrompt
+    content:
+        "Здравствуйте! Я бот воды «Тибетская». Чем могу помочь? Воскресенье не работаем и не доставляем!!! Заказ воды: Укажите адрес и количество бутылей (минимум 2). Мы предлагаем бутыли объёмом 18,9 л и 12,5 л. Цена бутыля 2500₸. Цены на воду: 18,9 л — 1300₸, 12,5 л — 900₸. Подтверждение заказа: Пример: «Ваш заказ: 4 бутыли 18,9 л по адресу [адрес]. Подтверждаете?» При подтверждении: «Спасибо! Курьер свяжется за час до доставки.» Мы не являемся плательщиками НДС. Бутыли обратно не выкупаем, после покупки бутылей клиентом они остаются у клиена. У нас нет никакого депозита, если у клиента нет возвратной тары то он покупает бутыли и эти бутыли теперь принадлежат клиенту. Дополнительные товары: Сайт: tibetskaya.kz/accessories. Чистка кулера: От 4000₸, скидка 50% при заказе воды. Мы работаем: Пн–Сб: 8:00–22:00, Вс: выходной. Контакты: Менеджер: 8 747 531 55 58. Теперь доступно клиентское приложение «Тибетская» для удобного заказа воды и дополнительных услуг!: iOS (Apple): https://apps.apple.com/app/id6737682997 , Android https://surl.li/emlyyw Скоро: приложение появится в PlayMarket! Если клиент просит новую версию то отвечай так (Если у вас ios то вы можете обновить через appStore, а если у вас android то можете перейти по ссылке и установить новую версию)",
 };
 
 const addChat = async (chatId) => {
@@ -194,11 +182,7 @@ client.on("message", async (msg) => {
     if (msg.body.toLowerCase() === "проверка") {
         // Если пользователь отправил "Проверка", возвращаем количество пользователей и сообщений
         const response = `Написали: ${uniqueUsersToday.size}.\nTelegram: ${messagesToTelegramToday}.`;
-        try {
-            await client.sendMessage(chatId, response);
-        } catch (error) {
-            console.error("Ошибка при отправке сообщения проверки:", error);
-        }
+        client.sendMessage(chatId, response);
         return;
     }
     if (msg.hasMedia) {
@@ -218,14 +202,10 @@ client.on("message", async (msg) => {
             // Отправляем аудиосообщение в Telegram
             sendAudioToTelegram(filePath, CLIENT_MESSAGE);
         } else {
-            try {
-                await client.sendMessage(
-                    chatId,
-                    "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение."
-                );
-            } catch (error) {
-                console.error("Ошибка при отправке сообщения об изображении:", error);
-            }
+            client.sendMessage(
+                chatId,
+                "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение."
+            );
         }
 
     } else if (msg.body) {
@@ -237,12 +217,9 @@ client.on("message", async (msg) => {
         ) {
             const message =
                 "Что бы связаться с Канатом прошу вас перейти по этой ссылке:\n\nhttps://wa.me/77015315558";
-            try {
-                await client.sendMessage(chatId, message);
-                saveMessageToHistory(chatId, message, "assistant");
-            } catch (error) {
-                console.error("Ошибка при отправке сообщения:", error);
-            }
+            client.sendMessage(chatId, message);
+
+            saveMessageToHistory(chatId, message, "assistant");
         } else if (msg.body.toLowerCase().includes("счет") || msg.body.toLowerCase().includes("счёт")) {
             const CHAT_ID = "-1002433505684";
             const CLIENT_NUMBER = chatId.slice(0, 11);
@@ -272,12 +249,10 @@ client.on("message", async (msg) => {
                     console.error("Error sending message:", error);
                 });
 
-            try {
-                await client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
-                saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
-            } catch (error) {
-                console.error("Ошибка при отправке сообщения:", error);
-            }
+            client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
+
+            // Сохраняем ответ бота в историю
+            saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
         } else {
             // Передаем всю историю диалога с системным сообщением в GPT
             const gptResponse = await getGPTResponse(chatHistories[chatId]);
@@ -287,25 +262,14 @@ client.on("message", async (msg) => {
                 gptResponse.toLowerCase().includes("принят")) || (gptResponse.toLowerCase().includes("заказыңыз") &&
                 gptResponse.toLowerCase().includes("қабылданды"))
             ) {
-                const date = new Date()
-                const day = date.getDay()
-                const hour = date.getHours()
-
-                try {
-                    await client.sendMessage(chatId, gptResponse);
-                    saveMessageToHistory(chatId, gptResponse, "assistant");
-                } catch (error) {
-                    console.error("Ошибка при отправке сообщения:", error);
-                }
+                client.sendMessage(chatId, gptResponse);
+                saveMessageToHistory(chatId, gptResponse, "assistant");
             } else {
                 // Отправляем ответ пользователю
-                try {
-                    await client.sendMessage(chatId, gptResponse);
-                    // Сохраняем ответ бота в историю
-                    saveMessageToHistory(chatId, gptResponse, "assistant");
-                } catch (error) {
-                    console.error("Ошибка при отправке сообщения:", error);
-                }
+                client.sendMessage(chatId, gptResponse);
+
+                // Сохраняем ответ бота в историю
+                saveMessageToHistory(chatId, gptResponse, "assistant");
             }
         }
     }
