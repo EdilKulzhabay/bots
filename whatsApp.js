@@ -120,6 +120,8 @@ async function getGPTResponse(chatHistory) {
         },
     ];
 
+    console.log(messages);
+
     try {
         const response = await axios.post(
             "https://api.openai.com/v1/chat/completions",
@@ -164,7 +166,7 @@ function saveMessageToHistory(chatId, message, role) {
 client.on("message", async (msg) => {
     resetCountersIfNeeded(); // Проверяем, нужно ли сбрасывать счетчики
     const chatId = msg.from;
-
+    console.log(chatId, msg.body);
     const chat = await Chat.findOne({chatId})
 
     if (chat) {
