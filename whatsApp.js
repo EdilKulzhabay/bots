@@ -1,6 +1,5 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
-const { OpenAIApi, Configuration } = require("openai");
 require("dotenv").config();
 const path = require("path");
 const { default: axios } = require("axios");
@@ -9,6 +8,7 @@ const fs = require("fs");
 const FormData = require('form-data');
 const mongoose = require("mongoose")
 const Chat = require("./Chat")
+const prompt = require("./prompt")
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
@@ -20,12 +20,6 @@ mongoose
     .catch((err) => {
         console.log("Mongodb Error", err);
     });
-
-    // Инициализация OpenAI API
-const configuration = new Configuration({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
 
 // Убедитесь, что путь к сессии корректный
 const client = new Client({
@@ -62,6 +56,11 @@ client.on("auth_failure", (msg) => {
 
 client.on("disconnected", (reason) => {
     console.log("Client was logged out:", reason);
+    // Перезапуск через 5 секунд
+    setTimeout(() => {
+        console.log("Attempting to reconnect...");
+        client.initialize();
+    }, 5000);
 });
 
 client.on("ready", () => {
@@ -70,13 +69,6 @@ client.on("ready", () => {
 
 // Хранилище для истории сообщений
 const chatHistories = {};
-
-// Системный промпт для установки контекста диалога
-const systemMessage = {
-    role: "system",
-    content:
-        "Здравствуйте! Я бот воды «Тибетская». Чем могу помочь? Воскресенье не работаем и не доставляем!!! Заказ воды: Укажите адрес и количество бутылей (минимум 2). Мы предлагаем бутыли объёмом 18,9 л и 12,5 л. Цена бутыля 2500₸. Цены на воду: 18,9 л — 1300₸, 12,5 л — 900₸. Подтверждение заказа: Пример: «Ваш заказ: 4 бутыли 18,9 л по адресу [адрес]. Подтверждаете?» При подтверждении: «Спасибо! Курьер свяжется за час до доставки.» Мы не являемся плательщиками НДС. Бутыли обратно не выкупаем, после покупки бутылей клиентом они остаются у клиена. У нас нет никакого депозита, если у клиента нет возвратной тары то он покупает бутыли и эти бутыли теперь принадлежат клиенту. Дополнительные товары: Сайт: tibetskaya.kz/accessories. Чистка кулера: От 4000₸, скидка 50% при заказе воды. Мы работаем: Пн–Сб: 8:00–22:00, Вс: выходной. Контакты: Менеджер: 8 747 531 55 58 Если заказ сделан после 12:00, доставка будет завтра. Теперь доступно клиентское приложение «Тибетская» для удобного заказа воды и дополнительных услуг!: iOS (Apple): https://apps.apple.com/app/id6737682997 , Android https://surl.li/emlyyw Скоро: приложение появится в PlayMarket! Если клиент просит новую версию то отвечай так (Если у вас ios то вы можете обновить через appStore, а если у вас android то можете перейти по ссылке и установить новую версию)",
-};
 
 const addChat = async (chatId) => {
     const chat = new Chat({
@@ -117,34 +109,36 @@ function resetCountersIfNeeded() {
 }
 
 async function getGPTResponse(chatHistory) {
-    let attempts = 0;
-    const maxAttempts = 3; // Максимум 3 попытки
-    const retryDelay = 3000; // 3 секунды между попытками
+    const messages = [
+        {
+            role: "system",
+            content: prompt,
+        },
+        {
+            role: "user",
+            content: chatHistory,
+        },
+    ];
 
-    // Добавляем системное сообщение перед историей
-    const messages = [systemMessage, ...chatHistory];
-
-    while (attempts < maxAttempts) {
-        try {
-            const response = await openai.createChatCompletion({
-                model: "gpt-4",
-                messages: messages, // передаем системное сообщение и всю историю диалога
-                max_tokens: 500,
-                temperature: 0.7,
-            });
-            return response.data.choices[0].message.content.trim();
-        } catch (error) {
-            if (error.response && error.response.status === 429) {
-                console.log("Превышен лимит запросов, повторная попытка...");
-                attempts++;
-                await new Promise((resolve) => setTimeout(resolve, retryDelay));
-            } else {
-                console.error("Ошибка при обращении к OpenAI:", error);
-                return "Извините, произошла ошибка при обработке вашего запроса.";
+    try {
+        const response = await axios.post(
+            "https://api.openai.com/v1/chat/completions",
+            {
+                model: "gpt-4o-mini",
+                messages,
+            },
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${OPENAI_API_KEY}`,
+                },
             }
-        }
+        );
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error("Ошибка в gptResponse:", error);
+        return "Ошибка при обработке запроса OpenAI.";
     }
-    return "Извините, превышен лимит попыток обращения к OpenAI.";
 }
 
 
@@ -266,12 +260,9 @@ client.on("message", async (msg) => {
                 const day = date.getDay()
                 const hour = date.getHours()
 
-                if (day === 0 || (day === 6 && hour >= 12)) {
+                if (day === 0) {
                     client.sendMessage(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
                     saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
-                } else if (hour >= 12) {
-                    client.sendMessage(chatId, "Спасибо! Ваш заказ принят на завтра. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
-                    saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на завтра. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
                 } else {
                     client.sendMessage(chatId, gptResponse);
                     saveMessageToHistory(chatId, gptResponse, "assistant");
