@@ -110,6 +110,10 @@ function resetCountersIfNeeded() {
 
 async function getGPTResponse(chatHistory) {
     // Формируем сообщения - добавляем системное сообщение и всю историю чата
+
+    console.log("prompt = ", prompt.prompt);
+    console.log("chatHistory = ", chatHistory);
+    return
     const messages = [
         {
             role: "system",
