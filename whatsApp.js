@@ -258,7 +258,6 @@ client.on("message", async (msg) => {
             ) {
                 const date = new Date()
                 const day = date.getDay()
-                const hour = date.getHours()
 
                 if (day === 0) {
                     client.sendMessage(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
