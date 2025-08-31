@@ -113,7 +113,6 @@ async function getGPTResponse(chatHistory) {
 
     console.log("prompt = ", prompt.prompt);
     console.log("chatHistory = ", chatHistory);
-    return
     const messages = [
         {
             role: "system",
