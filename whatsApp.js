@@ -109,18 +109,16 @@ function resetCountersIfNeeded() {
 }
 
 async function getGPTResponse(chatHistory) {
+    // Формируем сообщения - добавляем системное сообщение и всю историю чата
     const messages = [
         {
             role: "system",
-            content: prompt,
+            content: prompt.prompt, // Используем только строку промпта, а не весь объект
         },
-        {
-            role: "user",
-            content: chatHistory,
-        },
+        ...chatHistory // Разворачиваем историю чата как массив сообщений
     ];
 
-    console.log(messages);
+    // console.log("messages = ", JSON.stringify(messages, null, 2)); // Для отладки
 
     try {
         const response = await axios.post(
@@ -166,7 +164,6 @@ function saveMessageToHistory(chatId, message, role) {
 client.on("message", async (msg) => {
     resetCountersIfNeeded(); // Проверяем, нужно ли сбрасывать счетчики
     const chatId = msg.from;
-    console.log(chatId, msg.body);
     const chat = await Chat.findOne({chatId})
 
     if (chat) {
