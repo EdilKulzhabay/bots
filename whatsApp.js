@@ -110,13 +110,28 @@ function resetCountersIfNeeded() {
 
 async function getGPTResponse(chatHistory) {
     // Формируем сообщения - добавляем системное сообщение и всю историю чата
+    
+    // Получаем текущую дату и день недели
+    const today = new Date();
+    const dateString = today.toLocaleDateString('ru-RU', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    // Добавляем актуальную дату в промпт
+    const promptWithDate = `${prompt.prompt}
 
-    console.log("prompt = ", prompt.prompt);
+ВАЖНО: Сегодня ${dateString}. 
+${today.getDay() === 0 ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РАБОТАЕМ и НЕ ДОСТАВЛЯЕМ! Все заказы принимаются на понедельник.' : 'Сегодня рабочий день, принимаем заказы.'}`;
+
+    console.log("prompt = ", promptWithDate);
     console.log("chatHistory = ", chatHistory);
     const messages = [
         {
             role: "system",
-            content: prompt.prompt, // Используем только строку промпта, а не весь объект
+            content: promptWithDate,
         },
         ...chatHistory // Разворачиваем историю чата как массив сообщений
     ];
