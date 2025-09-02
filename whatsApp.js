@@ -126,8 +126,6 @@ async function getGPTResponse(chatHistory) {
 ВАЖНО: Сегодня ${dateString}. 
 ${today.getDay() === 0 ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РАБОТАЕМ и НЕ ДОСТАВЛЯЕМ! Все заказы принимаются на понедельник.' : 'Сегодня рабочий день, принимаем заказы.'}`;
 
-    console.log("prompt = ", promptWithDate);
-    console.log("chatHistory = ", chatHistory);
     const messages = [
         {
             role: "system",
