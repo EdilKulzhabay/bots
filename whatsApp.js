@@ -40,7 +40,9 @@ const client = new Client({
 });
 
 client.on("qr", (qr) => {
+    console.log('QR код сгенерирован. Отсканируйте его с помощью WhatsApp:');
     qrcode.generate(qr, { small: true });
+    console.log('После сканирования QR кода бот будет готов к работе.');
 });
 
 client.on("authenticated", (session) => {
@@ -64,7 +66,8 @@ client.on("disconnected", (reason) => {
 });
 
 client.on("ready", () => {
-    console.log("Client is ready!");
+    console.log("WhatsApp клиент подключен и готов к работе!");
+    console.log("Бот успешно запущен и ожидает сообщения.");
 });
 
 // Хранилище для истории сообщений
@@ -126,22 +129,25 @@ async function getGPTResponse(chatHistory) {
 ВАЖНО: Сегодня ${dateString}. 
 ${today.getDay() === 0 ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РАБОТАЕМ и НЕ ДОСТАВЛЯЕМ! Все заказы принимаются на понедельник.' : 'Сегодня рабочий день, принимаем заказы.'}`;
 
-    const messages = [
-        {
-            role: "system",
-            content: promptWithDate,
-        },
-        ...chatHistory // Разворачиваем историю чата как массив сообщений
-    ];
-
     // console.log("messages = ", JSON.stringify(messages, null, 2)); // Для отладки
 
     try {
+        // Фильтруем пустые сообщения из истории
+        const filteredHistory = chatHistory ? chatHistory.filter(msg => msg && msg.content && msg.content.trim() !== '') : [];
+        
+        const cleanMessages = [
+            {
+                role: "system",
+                content: promptWithDate,
+            },
+            ...filteredHistory
+        ];
+        
         const response = await axios.post(
             "https://api.openai.com/v1/chat/completions",
             {
                 model: "gpt-4o-mini",
-                messages,
+                messages: cleanMessages,
             },
             {
                 headers: {
@@ -152,7 +158,7 @@ ${today.getDay() === 0 ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РА
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error("Ошибка в gptResponse:", error);
+        console.error("Ошибка в gptResponse:", error.response?.data || error.message);
         return "Ошибка при обработке запроса OpenAI.";
     }
 }
@@ -188,6 +194,13 @@ client.on("message", async (msg) => {
 
     // Добавляем пользователя в список уникальных за день
     uniqueUsersToday.add(chatId);
+    
+    // Проверяем, что msg.body существует
+    if (!msg.body) {
+        console.log("Получено сообщение без текста");
+        return;
+    }
+    
     if (msg.body.toLowerCase() === "проверка") {
         // Если пользователь отправил "Проверка", возвращаем количество пользователей и сообщений
         const response = `Написали: ${uniqueUsersToday.size}.\nTelegram: ${messagesToTelegramToday}.`;
@@ -265,6 +278,13 @@ client.on("message", async (msg) => {
         } else {
             // Передаем всю историю диалога с системным сообщением в GPT
             const gptResponse = await getGPTResponse(chatHistories[chatId]);
+            
+            // Проверяем, что gptResponse существует
+            if (!gptResponse) {
+                console.log("Получен пустой ответ от GPT");
+                client.sendMessage(chatId, "Извините, произошла ошибка. Попробуйте еще раз.");
+                return;
+            }
 
             if (
                 (gptResponse.toLowerCase().includes("заказ") &&
