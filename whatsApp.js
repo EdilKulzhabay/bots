@@ -23,48 +23,68 @@ mongoose
 
 // Убедитесь, что путь к сессии корректный
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({
+        clientId: "tibetskaya-bot"
+    }),
     puppeteer: {
-        headless: true, // Убедитесь, что Puppeteer работает в headless режиме
+        headless: true,
         args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--single-process',
-            '--memory-pressure-off',
-            '--disable-background-timer-throttling',
-            '--disable-breakpad'
+            "--no-sandbox",
+            "--disable-setuid-sandbox", 
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-extensions",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+            "--disable-features=TranslateUI",
+            "--disable-web-security",
+            "--no-first-run",
+            "--no-default-browser-check"
         ],
+        timeout: 90000, // Увеличенный таймаут до 90 секунд
+        defaultViewport: null,
     },
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+    }
 });
 
 client.on("qr", (qr) => {
     qrcode.generate(qr, { small: true });
 });
 
-client.on("authenticated", (session) => {
-    console.log(
-        "Authenticated with session:",
-        session ? JSON.stringify(session) : "undefined"
-    );
+client.on("authenticated", () => {
+    console.log("✅ Authenticated successfully!");
 });
 
 client.on("auth_failure", (msg) => {
-    console.error("Authentication failed:", msg);
+    console.error("❌ Authentication failed:", msg);
+});
+
+// Добавляем событие загрузки
+client.on('loading_screen', (percent, message) => {
+    console.log('⏳ Загрузка WhatsApp:', percent + '%', message);
+});
+
+// Добавляем событие смены состояния
+client.on('change_state', state => {
+    console.log('🔄 Состояние клиента:', state);
 });
 
 client.on("disconnected", (reason) => {
-    console.log("Client was logged out:", reason);
+    console.log("❌ Client was logged out:", reason);
     // Перезапуск через 5 секунд
     setTimeout(() => {
-        console.log("Attempting to reconnect...");
+        console.log("🔄 Attempting to reconnect...");
         client.initialize();
     }, 5000);
 });
 
 client.on("ready", () => {
-    console.log("Client is ready!");
+    console.log("🚀 Client is ready!");
+    console.log("📱 Бот готов принимать сообщения!");
 });
 
 // Хранилище для истории сообщений
@@ -110,13 +130,20 @@ function resetCountersIfNeeded() {
 
 async function getGPTResponse(chatHistory) {
     // Формируем сообщения - добавляем системное сообщение и всю историю чата
+    
+    // Добавляем актуальную дату
+    const today = new Date();
+    const dateString = today.toLocaleDateString('ru-RU', { weekday: 'long' });
+    const promptWithDate = `${prompt.prompt}
 
-    console.log("prompt = ", prompt.prompt);
+ВАЖНО: Сегодня ${dateString}. ${today.getDay() === 0 ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РАБОТАЕМ и НЕ ДОСТАВЛЯЕМ!' : 'Сегодня рабочий день.'}`;
+
+    console.log("prompt = ", promptWithDate);
     console.log("chatHistory = ", chatHistory);
     const messages = [
         {
             role: "system",
-            content: prompt.prompt, // Используем только строку промпта, а не весь объект
+            content: promptWithDate,
         },
         ...chatHistory // Разворачиваем историю чата как массив сообщений
     ];
@@ -165,117 +192,133 @@ function saveMessageToHistory(chatId, message, role) {
 
 // Обработка входящих сообщений
 client.on("message", async (msg) => {
-    resetCountersIfNeeded(); // Проверяем, нужно ли сбрасывать счетчики
-    const chatId = msg.from;
-    const chat = await Chat.findOne({chatId})
+    try {
+        console.log("📨 Получено сообщение от:", msg.from);
+        console.log("📄 Текст:", msg.body || "[Нет текста]");
+        
+        resetCountersIfNeeded(); // Проверяем, нужно ли сбрасывать счетчики
+        const chatId = msg.from;
+        const chat = await Chat.findOne({chatId})
 
-    if (chat) {
-        return
-    }
-
-    // Добавляем пользователя в список уникальных за день
-    uniqueUsersToday.add(chatId);
-    if (msg.body.toLowerCase() === "проверка") {
-        // Если пользователь отправил "Проверка", возвращаем количество пользователей и сообщений
-        const response = `Написали: ${uniqueUsersToday.size}.\nTelegram: ${messagesToTelegramToday}.`;
-        client.sendMessage(chatId, response);
-        return;
-    }
-    if (msg.hasMedia) {
-        const media = await msg.downloadMedia();
-
-        if (media.mimetype.startsWith("audio/")) {
-            // Генерация уникального имени файла
-            const filePath = path.join(__dirname, `/whatsAppAudio/audio_${Date.now()}.ogg`);
-
-            // Записываем файл на диск
-            fs.writeFileSync(filePath, media.data, { encoding: "base64" });
-
-            console.log(`Аудиосообщение сохранено как ${filePath}`);
-            const CLIENT_NUMBER = chatId.slice(0, 11);
-            const CLIENT_MESSAGE = `Клиент отправил аудио сообщение:\nНомер клиента: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
-
-            // Отправляем аудиосообщение в Telegram
-            sendAudioToTelegram(filePath, CLIENT_MESSAGE);
-        } else {
-            client.sendMessage(
-                chatId,
-                "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение."
-            );
+        if (chat) {
+            console.log("🚫 Бот отключен для этого чата");
+            return
         }
 
-    } else if (msg.body) {
-        saveMessageToHistory(chatId, msg.body, "user");
-        if (
-            msg.body.toLowerCase().includes("кана") ||
-            msg.body.toLowerCase().includes("канат") ||
-            msg.body.toLowerCase().includes("қанат")
-        ) {
-            const message =
-                "Что бы связаться с Канатом прошу вас перейти по этой ссылке:\n\nhttps://wa.me/77015315558";
-            client.sendMessage(chatId, message);
+        // Добавляем пользователя в список уникальных за день
+        uniqueUsersToday.add(chatId);
+        
+        if (!msg.body) {
+            console.log("⚠️ Сообщение без текста, пропускаем");
+            return;
+        }
+        
+        if (msg.body.toLowerCase() === "проверка") {
+            // Если пользователь отправил "Проверка", возвращаем количество пользователей и сообщений
+            const response = `Написали: ${uniqueUsersToday.size}.\nTelegram: ${messagesToTelegramToday}.`;
+            client.sendMessage(chatId, response);
+            return;
+        }
+        
+        if (msg.hasMedia) {
+            const media = await msg.downloadMedia();
 
-            saveMessageToHistory(chatId, message, "assistant");
-        } else if (msg.body.toLowerCase().includes("счет") || msg.body.toLowerCase().includes("счёт")) {
-            const CHAT_ID = "-1002433505684";
-            const CLIENT_NUMBER = chatId.slice(0, 11);
-            const CLIENT_MESSAGE = `Клиент отправил запрос на счет на оплату:\nНомер клиента: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
+            if (media.mimetype.startsWith("audio/")) {
+                // Генерация уникального имени файла
+                const filePath = path.join(__dirname, `/whatsAppAudio/audio_${Date.now()}.ogg`);
 
-            axios
-                .post(
-                    url,
-                    new URLSearchParams({
-                        chat_id: CHAT_ID,
-                        text: CLIENT_MESSAGE,
-                    }).toString(),
-                    {
-                        headers: {
-                            "Content-Type":
-                                "application/x-www-form-urlencoded",
-                        },
-                    }
-                )
-                .then((response) => {
-                    console.log(
-                        "Message sent successfully:",
-                        response.data
-                    );
-                })
-                .catch((error) => {
-                    console.error("Error sending message:", error);
-                });
+                // Записываем файл на диск
+                fs.writeFileSync(filePath, media.data, { encoding: "base64" });
 
-            client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
+                console.log(`Аудиосообщение сохранено как ${filePath}`);
+                const CLIENT_NUMBER = chatId.slice(0, 11);
+                const CLIENT_MESSAGE = `Клиент отправил аудио сообщение:\nНомер клиента: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
 
-            // Сохраняем ответ бота в историю
-            saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
-        } else {
-            // Передаем всю историю диалога с системным сообщением в GPT
-            const gptResponse = await getGPTResponse(chatHistories[chatId]);
-
-            if (
-                (gptResponse.toLowerCase().includes("заказ") &&
-                gptResponse.toLowerCase().includes("принят")) || (gptResponse.toLowerCase().includes("заказыңыз") &&
-                gptResponse.toLowerCase().includes("қабылданды"))
-            ) {
-                const date = new Date()
-                const day = date.getDay()
-
-                if (day === 0) {
-                    client.sendMessage(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
-                    saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
-                } else {
-                    client.sendMessage(chatId, gptResponse);
-                    saveMessageToHistory(chatId, gptResponse, "assistant");
-                }
+                // Отправляем аудиосообщение в Telegram
+                sendAudioToTelegram(filePath, CLIENT_MESSAGE);
             } else {
-                // Отправляем ответ пользователю
-                client.sendMessage(chatId, gptResponse);
+                client.sendMessage(
+                    chatId,
+                    "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение."
+                );
+            }
+        } else if (msg.body) {
+            saveMessageToHistory(chatId, msg.body, "user");
+            if (
+                msg.body.toLowerCase().includes("кана") ||
+                msg.body.toLowerCase().includes("канат") ||
+                msg.body.toLowerCase().includes("қанат")
+            ) {
+                const message =
+                    "Что бы связаться с Канатом прошу вас перейти по этой ссылке:\n\nhttps://wa.me/77015315558";
+                client.sendMessage(chatId, message);
+
+                saveMessageToHistory(chatId, message, "assistant");
+            } else if (msg.body.toLowerCase().includes("счет") || msg.body.toLowerCase().includes("счёт")) {
+                const CHAT_ID = "-1002433505684";
+                const CLIENT_NUMBER = chatId.slice(0, 11);
+                const CLIENT_MESSAGE = `Клиент отправил запрос на счет на оплату:\nНомер клиента: +${CLIENT_NUMBER}\nhttps://wa.me/${CLIENT_NUMBER}`;
+
+                axios
+                    .post(
+                        url,
+                        new URLSearchParams({
+                            chat_id: CHAT_ID,
+                            text: CLIENT_MESSAGE,
+                        }).toString(),
+                        {
+                            headers: {
+                                "Content-Type":
+                                    "application/x-www-form-urlencoded",
+                            },
+                        }
+                    )
+                    .then((response) => {
+                        console.log(
+                            "Message sent successfully:",
+                            response.data
+                        );
+                    })
+                    .catch((error) => {
+                        console.error("Error sending message:", error);
+                    });
+
+                client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
 
                 // Сохраняем ответ бота в историю
-                saveMessageToHistory(chatId, gptResponse, "assistant");
+                saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
+            } else {
+                // Передаем всю историю диалога с системным сообщением в GPT
+                const gptResponse = await getGPTResponse(chatHistories[chatId]);
+                
+                if (!gptResponse) return; // Проверка на пустой ответ от GPT
+
+                if (
+                    (gptResponse.toLowerCase().includes("заказ") &&
+                    gptResponse.toLowerCase().includes("принят")) || (gptResponse.toLowerCase().includes("заказыңыз") &&
+                    gptResponse.toLowerCase().includes("қабылданды"))
+                ) {
+                    const date = new Date()
+                    const day = date.getDay()
+
+                    if (day === 0) {
+                        client.sendMessage(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
+                        saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
+                    } else {
+                        client.sendMessage(chatId, gptResponse);
+                        saveMessageToHistory(chatId, gptResponse, "assistant");
+                    }
+                } else {
+                    // Отправляем ответ пользователю
+                    client.sendMessage(chatId, gptResponse);
+
+                    // Сохраняем ответ бота в историю
+                    saveMessageToHistory(chatId, gptResponse, "assistant");
+                }
             }
         }
+    } catch (error) {
+        console.error("❌ Ошибка при обработке сообщения:", error);
     }
 });
 
