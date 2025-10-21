@@ -128,18 +128,19 @@ function resetCountersIfNeeded() {
     }
 }
 
-async function getGPTResponse(chatHistory) {
+async function getGPTResponse(chatHistory, currentDate, isWeekend) {
     // Формируем сообщения - добавляем системное сообщение и всю историю чата
     
     // Добавляем актуальную дату
-    const today = new Date();
-    const dateString = today.toLocaleDateString('ru-RU', { weekday: 'long' });
+    const dateString = currentDate.toLocaleDateString('ru-RU', { weekday: 'long' });
     const promptWithDate = `${prompt.prompt}
 
-ВАЖНО: Сегодня ${dateString}. ${today.getDay() === 0 ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РАБОТАЕМ и НЕ ДОСТАВЛЯЕМ!' : 'Сегодня рабочий день.'}`;
+ВАЖНО: Сегодня ${dateString}. ${isWeekend ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РАБОТАЕМ и НЕ ДОСТАВЛЯЕМ! Любые заказы принимаются только на понедельник.' : 'Сегодня рабочий день.'}`;
 
-    console.log("prompt = ", promptWithDate);
-    console.log("chatHistory = ", chatHistory);
+    console.log("🤖 Отправляем GPT промпт с датой:", dateString);
+    console.log("🤖 Это воскресенье:", isWeekend);
+    console.log("🤖 Полный промпт:", promptWithDate);
+    console.log("🤖 История чата:", chatHistory);
     const messages = [
         {
             role: "system",
@@ -197,6 +198,16 @@ client.on("message", async (msg) => {
         console.log("📄 Текст:", msg.body || "[Нет текста]");
         
         resetCountersIfNeeded(); // Проверяем, нужно ли сбрасывать счетчики
+        
+        // Создаем одну дату для всей логики обработки сообщения
+        const currentDate = new Date();
+        const currentDay = currentDate.getDay(); // 0 = воскресенье
+        const isWeekend = currentDay === 0;
+        
+        console.log(`📅 Текущая дата: ${currentDate.toLocaleString('ru-RU')}`);
+        console.log(`📅 День недели: ${currentDay} (0=воскресенье)`);
+        console.log(`📅 Это воскресенье: ${isWeekend}`);
+        
         const chatId = msg.from;
         const chat = await Chat.findOne({chatId})
 
@@ -289,7 +300,7 @@ client.on("message", async (msg) => {
                 saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
             } else {
                 // Передаем всю историю диалога с системным сообщением в GPT
-                const gptResponse = await getGPTResponse(chatHistories[chatId]);
+                const gptResponse = await getGPTResponse(chatHistories[chatId], currentDate, isWeekend);
                 
                 if (!gptResponse) return; // Проверка на пустой ответ от GPT
 
@@ -298,13 +309,16 @@ client.on("message", async (msg) => {
                     gptResponse.toLowerCase().includes("принят")) || (gptResponse.toLowerCase().includes("заказыңыз") &&
                     gptResponse.toLowerCase().includes("қабылданды"))
                 ) {
-                    const date = new Date()
-                    const day = date.getDay()
-
-                    if (day === 0) {
+                    console.log("✅ GPT принял заказ, проверяем день недели");
+                    console.log("📅 Воскресенье?", isWeekend);
+                    
+                    // Используем уже созданную переменную isWeekend для проверки
+                    if (isWeekend) {
+                        console.log("📅 Заказ в воскресенье - переносим на понедельник");
                         client.sendMessage(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
                         saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
                     } else {
+                        console.log("📅 Рабочий день - отправляем ответ GPT как есть");
                         client.sendMessage(chatId, gptResponse);
                         saveMessageToHistory(chatId, gptResponse, "assistant");
                     }
