@@ -128,19 +128,13 @@ function resetCountersIfNeeded() {
     }
 }
 
-async function getGPTResponse(chatHistory, currentDate, isWeekend) {
+async function getGPTResponse(chatHistory, isWeekend) {
     // Формируем сообщения - добавляем системное сообщение и всю историю чата
     
     // Добавляем актуальную дату
-    const dateString = currentDate.toLocaleDateString('ru-RU', { weekday: 'long' });
-    const promptWithDate = `${prompt.prompt}
+    const weekendString = isWeekend ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РАБОТАЕМ и НЕ ДОСТАВЛЯЕМ! Любые заказы принимаются только на понедельник.' : 'Сегодня рабочий день.';
+    const promptWithDate = `${prompt.prompt}\nВАЖНО: ${weekendString}`;
 
-ВАЖНО: Сегодня ${dateString}. ${isWeekend ? 'Сегодня ВОСКРЕСЕНЬЕ - мы НЕ РАБОТАЕМ и НЕ ДОСТАВЛЯЕМ! Любые заказы принимаются только на понедельник.' : 'Сегодня рабочий день.'}`;
-
-    console.log("🤖 Отправляем GPT промпт с датой:", dateString);
-    console.log("🤖 Это воскресенье:", isWeekend);
-    console.log("🤖 Полный промпт:", promptWithDate);
-    console.log("🤖 История чата:", chatHistory);
     const messages = [
         {
             role: "system",
@@ -203,10 +197,6 @@ client.on("message", async (msg) => {
         const currentDate = new Date();
         const currentDay = currentDate.getDay(); // 0 = воскресенье
         const isWeekend = currentDay === 0;
-        
-        console.log(`📅 Текущая дата: ${currentDate.toLocaleString('ru-RU')}`);
-        console.log(`📅 День недели: ${currentDay} (0=воскресенье)`);
-        console.log(`📅 Это воскресенье: ${isWeekend}`);
         
         const chatId = msg.from;
         const chat = await Chat.findOne({chatId})
@@ -300,7 +290,7 @@ client.on("message", async (msg) => {
                 saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
             } else {
                 // Передаем всю историю диалога с системным сообщением в GPT
-                const gptResponse = await getGPTResponse(chatHistories[chatId], currentDate, isWeekend);
+                const gptResponse = await getGPTResponse(chatHistories[chatId], isWeekend);
                 
                 if (!gptResponse) return; // Проверка на пустой ответ от GPT
 
@@ -308,10 +298,7 @@ client.on("message", async (msg) => {
                     (gptResponse.toLowerCase().includes("заказ") &&
                     gptResponse.toLowerCase().includes("принят")) || (gptResponse.toLowerCase().includes("заказыңыз") &&
                     gptResponse.toLowerCase().includes("қабылданды"))
-                ) {
-                    console.log("✅ GPT принял заказ, проверяем день недели");
-                    console.log("📅 Воскресенье?", isWeekend);
-                    
+                ) { 
                     // Используем уже созданную переменную isWeekend для проверки
                     if (isWeekend) {
                         console.log("📅 Заказ в воскресенье - переносим на понедельник");
