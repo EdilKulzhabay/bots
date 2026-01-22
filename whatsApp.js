@@ -48,8 +48,7 @@ const client = new Client({
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
-    },
-    markAsRead: false // Отключаем автоматическую отправку "прочитано" для избежания ошибок
+    }
 });
 
 client.on("qr", (qr) => {
@@ -219,7 +218,7 @@ client.on("message", async (msg) => {
             // Если пользователь отправил "Проверка", возвращаем количество пользователей и сообщений
             const response = `Написали: ${uniqueUsersToday.size}.\nTelegram: ${messagesToTelegramToday}.`;
             try {
-                await client.sendMessage(chatId, response);
+                await client.sendMessage(chatId, response, { sendSeen: false });
             } catch (error) {
                 console.error("❌ Ошибка при отправке сообщения:", error.message);
             }
@@ -246,7 +245,8 @@ client.on("message", async (msg) => {
                 try {
                     await client.sendMessage(
                         chatId,
-                        "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение."
+                        "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение.",
+                        { sendSeen: false }
                     );
                 } catch (error) {
                     console.error("❌ Ошибка при отправке сообщения:", error.message);
@@ -262,7 +262,7 @@ client.on("message", async (msg) => {
                 const message =
                     "Что бы связаться с Канатом прошу вас перейти по этой ссылке:\n\nhttps://wa.me/77015315558";
                 try {
-                    await client.sendMessage(chatId, message);
+                    await client.sendMessage(chatId, message, { sendSeen: false });
                     saveMessageToHistory(chatId, message, "assistant");
                 } catch (error) {
                     console.error("❌ Ошибка при отправке сообщения:", error.message);
@@ -297,7 +297,7 @@ client.on("message", async (msg) => {
                     });
 
                 try {
-                    await client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
+                    await client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", { sendSeen: false });
                     // Сохраняем ответ бота в историю
                     saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
                 } catch (error) {
@@ -319,7 +319,7 @@ client.on("message", async (msg) => {
                         console.log("📅 Заказ в воскресенье - переносим на понедельник");
                         const weekendMessage = "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!";
                         try {
-                            await client.sendMessage(chatId, weekendMessage);
+                            await client.sendMessage(chatId, weekendMessage, { sendSeen: false });
                             saveMessageToHistory(chatId, weekendMessage, "assistant");
                         } catch (error) {
                             console.error("❌ Ошибка при отправке сообщения:", error.message);
@@ -327,7 +327,7 @@ client.on("message", async (msg) => {
                     } else {
                         console.log("📅 Рабочий день - отправляем ответ GPT как есть");
                         try {
-                            await client.sendMessage(chatId, gptResponse);
+                            await client.sendMessage(chatId, gptResponse, { sendSeen: false });
                             saveMessageToHistory(chatId, gptResponse, "assistant");
                         } catch (error) {
                             console.error("❌ Ошибка при отправке сообщения:", error.message);
@@ -336,7 +336,7 @@ client.on("message", async (msg) => {
                 } else {
                     // Отправляем ответ пользователю
                     try {
-                        await client.sendMessage(chatId, gptResponse);
+                        await client.sendMessage(chatId, gptResponse, { sendSeen: false });
                         // Сохраняем ответ бота в историю
                         saveMessageToHistory(chatId, gptResponse, "assistant");
                     } catch (error) {
