@@ -48,7 +48,8 @@ const client = new Client({
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
-    }
+    },
+    markAsRead: false // Отключаем автоматическую отправку "прочитано" для избежания ошибок
 });
 
 client.on("qr", (qr) => {
@@ -217,7 +218,11 @@ client.on("message", async (msg) => {
         if (msg.body.toLowerCase() === "проверка") {
             // Если пользователь отправил "Проверка", возвращаем количество пользователей и сообщений
             const response = `Написали: ${uniqueUsersToday.size}.\nTelegram: ${messagesToTelegramToday}.`;
-            client.sendMessage(chatId, response);
+            try {
+                await client.sendMessage(chatId, response);
+            } catch (error) {
+                console.error("❌ Ошибка при отправке сообщения:", error.message);
+            }
             return;
         }
         
@@ -238,10 +243,14 @@ client.on("message", async (msg) => {
                 // Отправляем аудиосообщение в Telegram
                 sendAudioToTelegram(filePath, CLIENT_MESSAGE);
             } else {
-                client.sendMessage(
-                    chatId,
-                    "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение."
-                );
+                try {
+                    await client.sendMessage(
+                        chatId,
+                        "К сожалению я не могу просматривать изображения, напишите ваш запрос или же отпарьте аудио сообщение."
+                    );
+                } catch (error) {
+                    console.error("❌ Ошибка при отправке сообщения:", error.message);
+                }
             }
         } else if (msg.body) {
             saveMessageToHistory(chatId, msg.body, "user");
@@ -252,9 +261,12 @@ client.on("message", async (msg) => {
             ) {
                 const message =
                     "Что бы связаться с Канатом прошу вас перейти по этой ссылке:\n\nhttps://wa.me/77015315558";
-                client.sendMessage(chatId, message);
-
-                saveMessageToHistory(chatId, message, "assistant");
+                try {
+                    await client.sendMessage(chatId, message);
+                    saveMessageToHistory(chatId, message, "assistant");
+                } catch (error) {
+                    console.error("❌ Ошибка при отправке сообщения:", error.message);
+                }
             } else if (msg.body.toLowerCase().includes("счет") || msg.body.toLowerCase().includes("счёт")) {
                 const CHAT_ID = "-1002433505684";
                 const CLIENT_NUMBER = chatId.slice(0, 11);
@@ -284,10 +296,13 @@ client.on("message", async (msg) => {
                         console.error("Error sending message:", error);
                     });
 
-                client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
-
-                // Сохраняем ответ бота в историю
-                saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
+                try {
+                    await client.sendMessage(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.");
+                    // Сохраняем ответ бота в историю
+                    saveMessageToHistory(chatId, "В ближайшее время с вами свяжется менеджер для выставления счета.", "assistant");
+                } catch (error) {
+                    console.error("❌ Ошибка при отправке сообщения:", error.message);
+                }
             } else {
                 // Передаем всю историю диалога с системным сообщением в GPT
                 const gptResponse = await getGPTResponse(chatHistories[chatId], isWeekend);
@@ -302,19 +317,31 @@ client.on("message", async (msg) => {
                     // Используем уже созданную переменную isWeekend для проверки
                     if (isWeekend) {
                         console.log("📅 Заказ в воскресенье - переносим на понедельник");
-                        client.sendMessage(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!");
-                        saveMessageToHistory(chatId, "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!", "assistant");
+                        const weekendMessage = "Спасибо! Ваш заказ принят на понедельник. Наш курьер свяжется с вами за час до доставки. Если у вас есть дополнительные вопросы или запросы, обязательно дайте мне знать!";
+                        try {
+                            await client.sendMessage(chatId, weekendMessage);
+                            saveMessageToHistory(chatId, weekendMessage, "assistant");
+                        } catch (error) {
+                            console.error("❌ Ошибка при отправке сообщения:", error.message);
+                        }
                     } else {
                         console.log("📅 Рабочий день - отправляем ответ GPT как есть");
-                        client.sendMessage(chatId, gptResponse);
-                        saveMessageToHistory(chatId, gptResponse, "assistant");
+                        try {
+                            await client.sendMessage(chatId, gptResponse);
+                            saveMessageToHistory(chatId, gptResponse, "assistant");
+                        } catch (error) {
+                            console.error("❌ Ошибка при отправке сообщения:", error.message);
+                        }
                     }
                 } else {
                     // Отправляем ответ пользователю
-                    client.sendMessage(chatId, gptResponse);
-
-                    // Сохраняем ответ бота в историю
-                    saveMessageToHistory(chatId, gptResponse, "assistant");
+                    try {
+                        await client.sendMessage(chatId, gptResponse);
+                        // Сохраняем ответ бота в историю
+                        saveMessageToHistory(chatId, gptResponse, "assistant");
+                    } catch (error) {
+                        console.error("❌ Ошибка при отправке сообщения:", error.message);
+                    }
                 }
             }
         }
