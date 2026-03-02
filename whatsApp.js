@@ -45,10 +45,7 @@ const client = new Client({
         timeout: 90000, // Увеличенный таймаут до 90 секунд
         defaultViewport: null,
     },
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
-    }
+    // webVersionCache удалён — вызывает "Execution context was destroyed" при навигации страницы
 });
 
 client.on("qr", (qr) => {
