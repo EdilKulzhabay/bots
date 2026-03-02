@@ -146,8 +146,12 @@ async function getGPTResponse(chatHistory, isWeekend) {
         const response = await axios.post(
             "https://api.openai.com/v1/chat/completions",
             {
-                model: "gpt-4o-mini",
+                model: "gpt-4o",
                 messages,
+                temperature: 0.3,
+                top_p: 1.0,
+                presence_penalty: 0.0,
+                frequency_penalty: 0.3,
             },
             {
                 headers: {
