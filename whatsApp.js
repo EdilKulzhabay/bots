@@ -13,7 +13,7 @@ const prompt = require("./prompt")
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
 mongoose
-    .connect("mongodb://localhost:27017/BotTibetskaya")
+    .connect("mongodb://localhost:27017/newBotTibetskaya")
     .then(() => {
         console.log("Mongodb OK");
     })
